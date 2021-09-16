@@ -71,10 +71,6 @@ async function fetchTree() {
     } else if (currentJob.data.type === 'BATCH_REWARD') {
       data = instance.methods.batchReward(rewardArgs).encodeABI()
     }
-    await currentTx.replace({
-      to: minerAddress,
-      data,
-    })
     console.log('replaced pending tx')
   }
 }
