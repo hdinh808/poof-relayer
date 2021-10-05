@@ -5,16 +5,12 @@ const { toBN } = require('web3-utils')
 const Redis = require('ioredis')
 const redis = new Redis(redisUrl)
 const Web3 = require('web3')
-const web3 = new Web3(
-  new Web3.providers.WebsocketProvider(wsRpcUrl, {
-    clientConfig: {
-      maxReceivedFrameSize: 100000000,
-      maxReceivedMessageSize: 100000000,
-    },
-  }),
-)
+const wsUrlPool = wsRpcUrl.split(',')
 const MinerABI = require('../abis/mining.abi.json')
 let contract
+
+let wsIdx = 0
+let web3
 
 let tree, eventSubscription, blockSubscription
 
@@ -88,6 +84,7 @@ async function updateRedis() {
   } else {
     console.log('Tree in redis is up to date, skipping update')
   }
+  await redis.hset('treeWatcherHealth', { status: true, error: '' })
 }
 
 async function rebuild() {
@@ -96,9 +93,24 @@ async function rebuild() {
   setTimeout(init, 3000)
 }
 
+function initWeb3() {
+  const url = wsUrlPool[wsIdx]
+  web3 = new Web3(
+    new Web3.providers.WebsocketProvider(url, {
+      clientConfig: {
+        maxReceivedFrameSize: 100000000,
+        maxReceivedMessageSize: 100000000,
+      },
+    }),
+  )
+  console.log('web3 url', url)
+  wsIdx = (wsIdx + 1) % wsUrlPool.length
+}
+
 async function init() {
   try {
     console.log('Initializing')
+    initWeb3()
     const miner = poof.PoofMiner.address
     contract = new web3.eth.Contract(MinerABI, miner)
     const block = await web3.eth.getBlockNumber()
@@ -110,7 +122,7 @@ async function init() {
     await updateRedis()
   } catch (e) {
     console.error('error on init treeWatcher', e.message)
-    process.exit(1)
+    setTimeout(init, 3000)
   }
 }
 
@@ -118,5 +130,6 @@ init()
 
 process.on('unhandledRejection', error => {
   console.error('Unhandled promise rejection', error)
+  redis.hset('treeWatcherHealth', { status: false, error: error.message })
   process.exit(1)
 })

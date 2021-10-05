@@ -22,7 +22,7 @@ wget https://raw.githubusercontent.com/poofcash/poof-relayer/mainnet/.env.exampl
 
    - set `NET_ID` (42220 for mainnet, 44787 for Alfajores)
    - set `HTTP_RPC_URL` rpc url for your celo node. E.g. https://forno.celo.org
-   - set `WS_RPC_URL` websocket url. E.g. wss://forno.celo.org/ws
+   - set `WS_RPC_URL` websocket url. E.g. wss://forno.celo.org/ws (additional fallback urls may be added, separated by commas)
    - set `ORACLE_RPC_URL` - rpc url for mainnet node for fetching prices (always have to be on mainnet). E.g. https://forno.celo.org
    - set `PRIVATE_KEY` for your relayer address (without 0x prefix)
    - set `VIRTUAL_HOST` and `LETSENCRYPT_HOST` to your domain and add DNS record pointing to your relayer ip address

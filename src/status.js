@@ -7,6 +7,7 @@ const redis = new Redis(redisUrl)
 async function status(req, res) {
   const celoPrices = await redis.hgetall('prices')
   const health = await redis.hgetall('health')
+  const treeWatcherHealth = await redis.hgetall('treeWatcherHealth')
   const gasPrices = await redis.hgetall('gasPrices')
 
   const {waiting: currentQueue} = await queue.queue.getJobCounts()
@@ -21,6 +22,7 @@ async function status(req, res) {
     miningServiceFee,
     version,
     health,
+    treeWatcherHealth,
     currentQueue,
   })
 }
