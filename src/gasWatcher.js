@@ -25,7 +25,7 @@ async function getGasPrices() {
     const goldTokenAddress = await kit.registry.addressFor(CeloContract.GoldToken)
     const gasPriceMinimumContract = await kit.contracts.getGasPriceMinimum()
     const gasPriceMinimum = await gasPriceMinimumContract.getGasPriceMinimum(goldTokenAddress)
-    gasPrices['min'] = fromWei(gasPriceMinimum.toString(), 'gwei')
+    gasPrices['min'] = Number(fromWei(gasPriceMinimum.toString(), 'gwei')) * 2
   } catch (e) {
     console.error(`cant get minimum gas price: ${e.toString()}`)
   }
