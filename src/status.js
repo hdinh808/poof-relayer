@@ -1,6 +1,13 @@
 const queue = require('./queue')
-const {netId, poofServiceFee, miningServiceFee, instances, redisUrl, rewardAccount} = require('./config')
-const {version} = require('../package.json')
+const {
+  netId,
+  poofServiceFee,
+  miningServiceFee,
+  instances,
+  redisUrl,
+  rewardAccount,
+} = require('./config')
+const { version } = require('../package.json')
 const Redis = require('ioredis')
 const redis = new Redis(redisUrl)
 
@@ -10,7 +17,7 @@ async function status(req, res) {
   const treeWatcherHealth = await redis.hgetall('treeWatcherHealth')
   const gasPrices = await redis.hgetall('gasPrices')
 
-  const {waiting: currentQueue} = await queue.queue.getJobCounts()
+  const { waiting: currentQueue } = await queue.queue.getJobCounts()
 
   res.json({
     rewardAccount,
@@ -35,7 +42,9 @@ function index(req, res) {
 
 async function getJob(req, res) {
   const status = await queue.getJobStatus(req.params.id)
-  return status ? res.json(status) : res.status(400).json({error: "The job doesn't exist"})
+  return status
+    ? res.json(status)
+    : res.status(400).json({ error: "The job doesn't exist" })
 }
 
 module.exports = {

@@ -30,7 +30,10 @@ ajv.addKeyword('isKnownContract', {
 ajv.addKeyword('isKnownPool', {
   validate: (schema, data) => {
     try {
-      return pools[netId].find(entry => entry.poolAddress.toLowerCase() === data) !== null
+      return (
+        pools[netId].find(entry => entry.poolAddress.toLowerCase() === data) !==
+        null
+      )
     } catch (e) {
       return false
     }
@@ -49,12 +52,19 @@ ajv.addKeyword('isFeeRecipient', {
   errors: true,
 })
 
-const addressType = { type: 'string', pattern: '^0x[a-fA-F0-9]{40}$', isAddress: true }
+const addressType = {
+  type: 'string',
+  pattern: '^0x[a-fA-F0-9]{40}$',
+  isAddress: true,
+}
 const proofType = { type: 'string', pattern: '^0x[a-fA-F0-9]{512}$' }
 const v2ProofType = { type: 'string', pattern: '^0x[a-fA-F0-9]{1600}$' }
 const rewardArgType = { type: 'string', pattern: '^0x[a-fA-F0-9]{2176}$' }
 const encryptedAccountType = { type: 'string', pattern: '^0x[a-fA-F0-9]{392}$' }
-const encryptedAccountV2Type = { type: 'string', pattern: '^0x[a-fA-F0-9]{480}$' }
+const encryptedAccountV2Type = {
+  type: 'string',
+  pattern: '^0x[a-fA-F0-9]{480}$',
+}
 const bytes32Type = { type: 'string', pattern: '^0x[a-fA-F0-9]{64}$' }
 const instanceType = { ...addressType, isKnownContract: true }
 const poolType = { ...addressType, isKnownPool: true }
@@ -69,7 +79,14 @@ const poofWithdrawSchema = {
       type: 'array',
       maxItems: 6,
       minItems: 6,
-      items: [bytes32Type, bytes32Type, addressType, relayerType, bytes32Type, bytes32Type],
+      items: [
+        bytes32Type,
+        bytes32Type,
+        addressType,
+        relayerType,
+        bytes32Type,
+        bytes32Type,
+      ],
     },
   },
   additionalProperties: false,
@@ -105,7 +122,13 @@ const miningArgs = {
         outputCommitment: bytes32Type,
       },
       additionalProperties: false,
-      required: ['inputRoot', 'inputNullifierHash', 'outputRoot', 'outputPathIndices', 'outputCommitment'],
+      required: [
+        'inputRoot',
+        'inputNullifierHash',
+        'outputRoot',
+        'outputPathIndices',
+        'outputCommitment',
+      ],
     },
   },
   additionalProperties: false,
@@ -174,7 +197,13 @@ const withdrawArgs = {
         outputCommitment: bytes32Type,
       },
       additionalProperties: false,
-      required: ['inputRoot', 'inputNullifierHash', 'outputRoot', 'outputPathIndices', 'outputCommitment'],
+      required: [
+        'inputRoot',
+        'inputNullifierHash',
+        'outputRoot',
+        'outputPathIndices',
+        'outputCommitment',
+      ],
     },
   },
   additionalProperties: false,
@@ -207,10 +236,23 @@ const withdrawV2Args = {
         encryptedAccount: encryptedAccountV2Type,
       },
       additionalProperties: false,
-      required: ['fee', 'relayer', 'encryptedAccount', 'recipient', 'depositProofHash'],
+      required: [
+        'fee',
+        'relayer',
+        'encryptedAccount',
+        'recipient',
+        'depositProofHash',
+      ],
     },
   },
-  required: ['amount', 'debt', 'unitPerUnderlying', 'extDataHash', 'extData', 'account'],
+  required: [
+    'amount',
+    'debt',
+    'unitPerUnderlying',
+    'extDataHash',
+    'extData',
+    'account',
+  ],
 }
 
 const withdrawV2Schema = {

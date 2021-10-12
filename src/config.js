@@ -1,7 +1,11 @@
 require('dotenv').config()
 
 const { jobType } = require('./constants')
-const { deployments, alfajoresAddresses, mainnetAddresses } = require('@poofcash/poof-kit')
+const {
+  deployments,
+  alfajoresAddresses,
+  mainnetAddresses,
+} = require('@poofcash/poof-kit')
 const { deployments: v2Deployments } = require('@poofcash/poof-v2-kit')
 const pools = v2Deployments
 

@@ -22,9 +22,13 @@ async function getGasPrices() {
   const kit = newKitFromWeb3(web3)
   const gasPrices = {}
   try {
-    const goldTokenAddress = await kit.registry.addressFor(CeloContract.GoldToken)
+    const goldTokenAddress = await kit.registry.addressFor(
+      CeloContract.GoldToken,
+    )
     const gasPriceMinimumContract = await kit.contracts.getGasPriceMinimum()
-    const gasPriceMinimum = await gasPriceMinimumContract.getGasPriceMinimum(goldTokenAddress)
+    const gasPriceMinimum = await gasPriceMinimumContract.getGasPriceMinimum(
+      goldTokenAddress,
+    )
     gasPrices['min'] = Number(fromWei(gasPriceMinimum.toString(), 'gwei')) * 2
   } catch (e) {
     console.error(`cant get minimum gas price: ${e.toString()}`)

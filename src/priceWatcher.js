@@ -23,14 +23,29 @@ async function main() {
     // Get cUSD price in CELO
     const exchangeUSD = await kit.contracts.getExchange(StableToken.cUSD)
     const exchangeEUR = await kit.contracts.getExchange(StableToken.cEUR)
-    const cusdPrice = Number(fromWei((await exchangeUSD.quoteGoldBuy(oneEth)).toString()))
-    const ceurPrice = Number(fromWei((await exchangeEUR.quoteGoldBuy(oneEth)).toString()))
+    const cusdPrice = Number(
+      fromWei((await exchangeUSD.quoteGoldBuy(oneEth)).toString()),
+    )
+    const ceurPrice = Number(
+      fromWei((await exchangeEUR.quoteGoldBuy(oneEth)).toString()),
+    )
 
     // get rCELO price in CELO
-    const rCELO = new kit.web3.eth.Contract(rceloABI, '0x1a8Dbe5958c597a744Ba51763AbEBD3355996c3e')
-    const rceloPrice = Number(fromWei((await rCELO.methods.savingsToCELO(oneEth).call()).toString()))
+    const rCELO = new kit.web3.eth.Contract(
+      rceloABI,
+      '0x1a8Dbe5958c597a744Ba51763AbEBD3355996c3e',
+    )
+    const rceloPrice = Number(
+      fromWei((await rCELO.methods.savingsToCELO(oneEth).call()).toString()),
+    )
 
-    const celoPrices = { celo: 1.0, poof: 1.0, rcelo: rceloPrice, cusd: cusdPrice, ceur: ceurPrice }
+    const celoPrices = {
+      celo: 1.0,
+      poof: 1.0,
+      rcelo: rceloPrice,
+      cusd: cusdPrice,
+      ceur: ceurPrice,
+    }
 
     await redis.hmset('prices', celoPrices)
     console.log('Wrote following prices to redis', celoPrices)

@@ -12,7 +12,12 @@ const miningABI = require('../abis/mining.abi.json')
 const swapABI = require('../abis/swap.abi.json')
 const poofABI = require('../abis/poof.abi.json')
 const { queue } = require('./queue')
-const { poseidonHashTorn2, getInstance, fromDecimals, sleep } = require('./utils')
+const {
+  poseidonHashTorn2,
+  getInstance,
+  fromDecimals,
+  sleep,
+} = require('./utils')
 const { jobType, status } = require('./constants')
 const {
   netId,
@@ -26,7 +31,11 @@ const {
   miningServiceFee,
   pools,
 } = require('./config')
-const { calculateFee, calculateRewardFee, calculateSwapFee } = require('@poofcash/poof-kit')
+const {
+  calculateFee,
+  calculateRewardFee,
+  calculateSwapFee,
+} = require('@poofcash/poof-kit')
 const { calculateFee: calculateFeeV2 } = require('@poofcash/poof-v2-kit')
 
 let kit
@@ -44,23 +53,45 @@ const redisSubscribe = new Redis(redisUrl)
 async function fetchTree() {
   const elements = await redis.get('tree:elements')
   const convert = (_, val) => (typeof val === 'string' ? toBN(val) : val)
-  tree = MerkleTree.deserialize(JSON.parse(elements, convert), poseidonHashTorn2)
+  tree = MerkleTree.deserialize(
+    JSON.parse(elements, convert),
+    poseidonHashTorn2,
+  )
 
-  if (currentTx && currentJob && ['MINING_REWARD', 'MINING_WITHDRAW'].includes(currentJob.data.type)) {
+  if (
+    currentTx &&
+    currentJob &&
+    ['MINING_REWARD', 'MINING_WITHDRAW'].includes(currentJob.data.type)
+  ) {
     const { proof, rewardArgs, args } = currentJob.data
     if (toBN(args.account.inputRoot).eq(toBN(tree.root()))) {
-      console.log('Account root is up to date. Skipping Root Update operation...')
+      console.log(
+        'Account root is up to date. Skipping Root Update operation...',
+      )
       return
     } else {
       console.log('Account root is outdated. Starting Root Update operation...')
     }
 
-    const update = await controller.treeUpdate(args.account.outputCommitment, tree)
+    const update = await controller.treeUpdate(
+      args.account.outputCommitment,
+      tree,
+    )
 
     if (currentJob.data.type === 'MINING_REWARD') {
-      currentTx = minerContract.methods.reward(proof, args, update.proof, update.args)
+      currentTx = minerContract.methods.reward(
+        proof,
+        args,
+        update.proof,
+        update.args,
+      )
     } else if (currentJob.data.type === 'MINING_WITHDRAW') {
-      currentTx = minerContract.methods.withdraw(proof, args, update.proof, update.args)
+      currentTx = minerContract.methods.withdraw(
+        proof,
+        args,
+        update.proof,
+        update.args,
+      )
     } else if (currentJob.data.type === 'BATCH_REWARD') {
       // todo: not reachable; not working; not handling treeUpdate
       currentTx = minerContract.methods.batchReward(rewardArgs)
@@ -77,12 +108,16 @@ async function start() {
     account = (await kit.web3.eth.getAccounts())[0]
     swap = new kit.web3.eth.Contract(swapABI, poof.PoofRewardSwap.address)
     minerContract = new kit.web3.eth.Contract(miningABI, poof.PoofMiner.address)
-    proxyContract = new kit.web3.eth.Contract(tornadoProxyABI, poof.PoofProxy.address)
+    proxyContract = new kit.web3.eth.Contract(
+      tornadoProxyABI,
+      poof.PoofProxy.address,
+    )
     redisSubscribe.subscribe('treeUpdate', fetchTree)
     await fetchTree()
     const provingKeys = {
       treeUpdateCircuit: require('../keys/TreeUpdate.json'),
-      treeUpdateProvingKey: fs.readFileSync('./keys/TreeUpdate_proving_key.bin').buffer,
+      treeUpdateProvingKey: fs.readFileSync('./keys/TreeUpdate_proving_key.bin')
+        .buffer,
     }
     controller = new Controller({ provingKeys })
     await controller.init()
@@ -131,7 +166,9 @@ async function checkPoofFee({ args, contract }) {
     fromWei(feePercent.toString()),
   )
   if (fee.lt(desiredFee)) {
-    throw new Error('Provided fee is not enough. Probably it is a Gas Price spike, try to resubmit.')
+    throw new Error(
+      'Provided fee is not enough. Probably it is a Gas Price spike, try to resubmit.',
+    )
   }
 }
 
@@ -144,7 +181,9 @@ async function checkBatchMiningFee({ args: argList }) {
 async function checkMiningFee({ args }) {
   const gasPrice = await redis.hget('gasPrices', 'min')
   const celoPrice = await redis.hget('prices', 'poof')
-  const isMiningReward = ['MINING_REWARD', 'BATCH_REWARD'].includes(currentJob.data.type)
+  const isMiningReward = ['MINING_REWARD', 'BATCH_REWARD'].includes(
+    currentJob.data.type,
+  )
   const providedFee = isMiningReward ? toBN(args.fee) : toBN(args.extData.fee)
   const balance = await swap.methods.poofVirtualBalance().call()
   const poolWeight = await swap.methods.poolWeight().call()
@@ -153,12 +192,25 @@ async function checkMiningFee({ args }) {
   if (isMiningReward) {
     desiredFee = calculateRewardFee(gasPrice, celoPrice, balance, poolWeight)
   } else {
-    desiredFee = calculateSwapFee(gasPrice, celoPrice, balance, poolWeight, miningServiceFee, args.amount)
+    desiredFee = calculateSwapFee(
+      gasPrice,
+      celoPrice,
+      balance,
+      poolWeight,
+      miningServiceFee,
+      args.amount,
+    )
   }
 
-  console.log('user provided fee, desired fee', providedFee.toString(), desiredFee.toString())
+  console.log(
+    'user provided fee, desired fee',
+    providedFee.toString(),
+    desiredFee.toString(),
+  )
   if (providedFee.lt(desiredFee)) {
-    throw new Error('Provided fee is not enough. Probably it is a Gas Price spike, try to resubmit.')
+    throw new Error(
+      'Provided fee is not enough. Probably it is a Gas Price spike, try to resubmit.',
+    )
   }
 }
 
@@ -166,7 +218,9 @@ async function checkWithdrawV2Fee({ args, contract }) {
   const { symbol, decimals } = pools[netId].find(
     entry => entry.poolAddress.toLowerCase() === contract.toLowerCase(),
   )
-  const [fee, amount, debt] = [args.extData.fee, args.amount, args.debt].map(toBN)
+  const [fee, amount, debt] = [args.extData.fee, args.amount, args.debt].map(
+    toBN,
+  )
 
   const celoPrice = await redis.hget('prices', symbol.toLowerCase())
   const feePercent = toBN(fromDecimals(amount, decimals))
@@ -188,14 +242,20 @@ async function checkWithdrawV2Fee({ args, contract }) {
     fromWei(feePercent.toString()),
   )
   if (fee.lt(desiredFee)) {
-    throw new Error('Provided fee is not enough. Probably it is a Gas Price spike, try to resubmit.')
+    throw new Error(
+      'Provided fee is not enough. Probably it is a Gas Price spike, try to resubmit.',
+    )
   }
 }
 
 function getTxObject({ data }) {
   if ([jobType.POOF_WITHDRAW, jobType.RELAY].includes(data.type)) {
     if (data.type === jobType.POOF_WITHDRAW) {
-      return proxyContract.methods.withdraw(data.contract, data.proof, ...data.args)
+      return proxyContract.methods.withdraw(
+        data.contract,
+        data.proof,
+        ...data.args,
+      )
     } else {
       const contract = new kit.web3.eth.Contract(tornadoABI, data.contract)
       return contract.methods.withdraw(data.proof, ...data.args)
@@ -248,7 +308,8 @@ async function submitTx(job, retry = 0) {
   await checkFee(job)
   currentTx = await getTxObject(job)
 
-  const isWithdraw = job.data.type === jobType.POOF_WITHDRAW || job.data.type === jobType.RELAY
+  const isWithdraw =
+    job.data.type === jobType.POOF_WITHDRAW || job.data.type === jobType.RELAY
   if (!isWithdraw) {
     await fetchTree()
   }
