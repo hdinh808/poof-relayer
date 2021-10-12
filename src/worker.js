@@ -42,7 +42,7 @@ let kit
 let account
 let currentTx
 let currentJob
-let tree
+let v1Tree
 let controller
 let swap
 let minerContract
@@ -50,10 +50,10 @@ let proxyContract
 const redis = new Redis(redisUrl)
 const redisSubscribe = new Redis(redisUrl)
 
-async function fetchTree() {
+async function fetchV1Tree() {
   const elements = await redis.get('tree:elements')
   const convert = (_, val) => (typeof val === 'string' ? toBN(val) : val)
-  tree = MerkleTree.deserialize(
+  v1Tree = MerkleTree.deserialize(
     JSON.parse(elements, convert),
     poseidonHashTorn2,
   )
@@ -64,7 +64,7 @@ async function fetchTree() {
     ['MINING_REWARD', 'MINING_WITHDRAW'].includes(currentJob.data.type)
   ) {
     const { proof, rewardArgs, args } = currentJob.data
-    if (toBN(args.account.inputRoot).eq(toBN(tree.root()))) {
+    if (toBN(args.account.inputRoot).eq(toBN(v1Tree.root()))) {
       console.log(
         'Account root is up to date. Skipping Root Update operation...',
       )
@@ -75,7 +75,7 @@ async function fetchTree() {
 
     const update = await controller.treeUpdate(
       args.account.outputCommitment,
-      tree,
+      v1Tree,
     )
 
     if (currentJob.data.type === 'MINING_REWARD') {
@@ -112,8 +112,8 @@ async function start() {
       tornadoProxyABI,
       poof.PoofProxy.address,
     )
-    redisSubscribe.subscribe('treeUpdate', fetchTree)
-    await fetchTree()
+    redisSubscribe.subscribe('treeUpdate', fetchV1Tree)
+    await fetchV1Tree()
     const provingKeys = {
       treeUpdateCircuit: require('../keys/TreeUpdate.json'),
       treeUpdateProvingKey: fs.readFileSync('./keys/TreeUpdate_proving_key.bin')
@@ -311,7 +311,7 @@ async function submitTx(job, retry = 0) {
   const isWithdraw =
     job.data.type === jobType.POOF_WITHDRAW || job.data.type === jobType.RELAY
   if (!isWithdraw) {
-    await fetchTree()
+    await fetchV1Tree()
   }
 
   try {
