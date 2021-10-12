@@ -12,7 +12,7 @@ const miningABI = require('../abis/mining.abi.json')
 const swapABI = require('../abis/swap.abi.json')
 const poofABI = require('../abis/poof.abi.json')
 const { queue } = require('./queue')
-const { poseidonHash2, getInstance, fromDecimals, sleep } = require('./utils')
+const { poseidonHashTorn2, getInstance, fromDecimals, sleep } = require('./utils')
 const { jobType, status } = require('./constants')
 const {
   netId,
@@ -44,7 +44,7 @@ const redisSubscribe = new Redis(redisUrl)
 async function fetchTree() {
   const elements = await redis.get('tree:elements')
   const convert = (_, val) => (typeof val === 'string' ? toBN(val) : val)
-  tree = MerkleTree.deserialize(JSON.parse(elements, convert), poseidonHash2)
+  tree = MerkleTree.deserialize(JSON.parse(elements, convert), poseidonHashTorn2)
 
   if (currentTx && currentJob && ['MINING_REWARD', 'MINING_WITHDRAW'].includes(currentJob.data.type)) {
     const { proof, rewardArgs, args } = currentJob.data

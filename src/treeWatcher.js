@@ -1,6 +1,6 @@
 const MerkleTree = require('fixed-merkle-tree')
 const { redisUrl, wsRpcUrl, minerMerkleTreeHeight, poof } = require('./config')
-const { poseidonHash2 } = require('./utils')
+const { poseidonHashTorn2 } = require('./utils')
 const { toBN } = require('web3-utils')
 const Redis = require('ioredis')
 const redis = new Redis(redisUrl)
@@ -17,10 +17,22 @@ let tree, eventSubscription, blockSubscription
 // todo handle the situation when we have two rewards in one block
 async function fetchEvents(from = 0, to = 'latest') {
   try {
-    const events = await contract.getPastEvents('NewAccount', {
-      fromBlock: from,
-      toBlock: to,
-    })
+    const start = from
+    const end = to === 'latest' ? await web3.eth.getBlockNumber() : to
+    const bucketSize = 100_000
+    const events = []
+    for (
+      let i = Math.floor(start / bucketSize);
+      i < Math.ceil(end / bucketSize);
+      i++
+    ) {
+      events.push(
+        ...(await contract.getPastEvents('NewAccount', {
+          fromBlock: Math.max(i * bucketSize, start),
+          toBlock: Math.min((i + 1) * bucketSize, end),
+        })),
+      )
+    }
     return events
       .sort((a, b) => a.returnValues.index - b.returnValues.index)
       .map(e => toBN(e.returnValues.commitment))
@@ -70,7 +82,11 @@ async function processNewBlock(err) {
 async function updateRedis() {
   const rootOnContract = await contract.methods.getLastAccountRoot().call()
   if (!tree.root().eq(toBN(rootOnContract))) {
-    console.log(`Invalid tree root: ${tree.root()} != ${toBN(rootOnContract)}, rebuilding tree`)
+    console.log(
+      `Invalid tree root: ${tree.root()} != ${toBN(
+        rootOnContract,
+      )}, rebuilding tree`,
+    )
     await rebuild()
     return
   }
@@ -115,9 +131,16 @@ async function init() {
     contract = new web3.eth.Contract(MinerABI, miner)
     const block = await web3.eth.getBlockNumber()
     const events = await fetchEvents(0, block)
-    tree = new MerkleTree(minerMerkleTreeHeight, events, { hashFunction: poseidonHash2 })
-    console.log(`Rebuilt tree with ${events.length} elements, root: ${tree.root()}`)
-    eventSubscription = contract.events.NewAccount({ fromBlock: block + 1 }, processNewEvent)
+    tree = new MerkleTree(minerMerkleTreeHeight, events, {
+      hashFunction: poseidonHashTorn2,
+    })
+    console.log(
+      `Rebuilt tree with ${events.length} elements, root: ${tree.root()}`,
+    )
+    eventSubscription = contract.events.NewAccount(
+      { fromBlock: block + 1 },
+      processNewEvent,
+    )
     blockSubscription = web3.eth.subscribe('newBlockHeaders', processNewBlock)
     await updateRedis()
   } catch (e) {

@@ -6,6 +6,7 @@
     "server": "node src/server.js",
     "worker": "node src/worker",
     "treeWatcher": "node src/treeWatcher",
+    "treeV2Watcher": "node src/treeV2Watcher.js",
     "priceWatcher": "node src/priceWatcher",
     "gasWatcher": "node src/gasWatcher",
     "healthWatcher": "node src/healthWatcher",
@@ -14,7 +15,7 @@
     "prettier:fix": "npx prettier --write . --config .prettierrc",
     "lint": "yarn eslint && yarn prettier:check",
     "test": "mocha",
-    "start": "yarn server & yarn gasWatcher & yarn priceWatcher & yarn treeWatcher & yarn worker & yarn healthWatcher"
+    "start": "yarn server & yarn gasWatcher & yarn priceWatcher & yarn treeWatcher & yarn treeV2Watcher & yarn worker & yarn healthWatcher"
   },
   "author": "poof.cash",
   "license": "MIT",
@@ -25,7 +26,8 @@
     "ajv": "^6.12.5",
     "async-mutex": "^0.2.4",
     "bull": "^3.12.1",
-    "circomlib": "git+https://github.com/tornadocash/circomlib.git#3b492f9801573eebcfe1b6c584afe8a3beecf2b4",
+    "circomlib-torn": "git+https://github.com/tornadocash/circomlib.git#3b492f9801573eebcfe1b6c584afe8a3beecf2b4",
+    "circomlib": "^0.5.4",
     "dotenv": "^8.2.0",
     "eth-ens-namehash": "^2.0.8",
     "express": "^4.17.1",

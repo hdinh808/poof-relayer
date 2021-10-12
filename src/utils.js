@@ -1,6 +1,7 @@
-const {instances, netId} = require('./config')
-const {poseidon} = require('circomlib')
-const {toBN, toChecksumAddress, BN} = require('web3-utils')
+const { instances, netId } = require('./config')
+const { poseidon: poseidonTorn } = require('circomlib-torn')
+const { poseidon } = require('circomlib')
+const { toBN, toChecksumAddress, BN } = require('web3-utils')
 
 const TORN_TOKEN = {
   tokenAddress: '0x77777FeDdddFfC19Ff86DB637967013e6C6A116C',
@@ -16,7 +17,7 @@ function getInstance(address) {
   for (const currency of Object.keys(inst)) {
     for (const amount of Object.keys(inst[currency].instanceAddress)) {
       if (inst[currency].instanceAddress[amount] === address) {
-        return {currency, amount}
+        return { currency, amount }
       }
     }
   }
@@ -25,6 +26,8 @@ function getInstance(address) {
 
 const poseidonHash = items => toBN(poseidon(items).toString())
 const poseidonHash2 = (a, b) => poseidonHash([a, b])
+const poseidonHashTorn = items => toBN(poseidonTorn(items).toString())
+const poseidonHashTorn2 = (a, b) => poseidonHashTorn([a, b])
 
 function setSafeInterval(func, interval) {
   func()
@@ -60,11 +63,13 @@ function getArgsForOracle() {
   Object.entries(tokens).map(([currency, data]) => {
     if (currency !== 'eth') {
       tokenAddresses.push(data.tokenAddress)
-      oneUintAmount.push(toBN('10').pow(toBN(data.decimals.toString())).toString())
+      oneUintAmount.push(
+        toBN('10').pow(toBN(data.decimals.toString())).toString(),
+      )
       currencyLookup[data.tokenAddress] = currency
     }
   })
-  return {tokenAddresses, oneUintAmount, currencyLookup}
+  return { tokenAddresses, oneUintAmount, currencyLookup }
 }
 
 function fromDecimals(value, decimals) {
@@ -79,13 +84,21 @@ function fromDecimals(value, decimals) {
   }
 
   if (ether === '.') {
-    throw new Error('[ethjs-unit] while converting number ' + value + ' to wei, invalid value')
+    throw new Error(
+      '[ethjs-unit] while converting number ' +
+        value +
+        ' to wei, invalid value',
+    )
   }
 
   // Split it into a whole and fractional part
   const comps = ether.split('.')
   if (comps.length > 2) {
-    throw new Error('[ethjs-unit] while converting number ' + value + ' to wei,  too many decimal points')
+    throw new Error(
+      '[ethjs-unit] while converting number ' +
+        value +
+        ' to wei,  too many decimal points',
+    )
   }
 
   let whole = comps[0]
@@ -98,7 +111,11 @@ function fromDecimals(value, decimals) {
     fraction = '0'
   }
   if (fraction.length > baseLength) {
-    throw new Error('[ethjs-unit] while converting number ' + value + ' to wei, too many decimal places')
+    throw new Error(
+      '[ethjs-unit] while converting number ' +
+        value +
+        ' to wei, too many decimal places',
+    )
   }
 
   while (fraction.length < baseLength) {
@@ -120,6 +137,7 @@ module.exports = {
   getInstance,
   setSafeInterval,
   poseidonHash2,
+  poseidonHashTorn2,
   sleep,
   when,
   getArgsForOracle,
