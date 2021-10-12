@@ -7,10 +7,17 @@ const {
   mainnetAddresses,
 } = require('@poofcash/poof-kit')
 const { deployments: v2Deployments } = require('@poofcash/poof-v2-kit')
+
+const netId = Number(process.env.NET_ID) || 42220
+const poof = netId === 42220 ? mainnetAddresses : alfajoresAddresses
 const pools = v2Deployments
+const treeAddresses = [
+  ...pools[netId].map(p => p.poolAddress),
+  poof.PoofMiner.address,
+]
 
 module.exports = {
-  netId: Number(process.env.NET_ID) || 42220,
+  netId,
   redisUrl: process.env.REDIS_URL || 'redis://127.0.0.1:6379',
   httpRpcUrl: process.env.HTTP_RPC_URL,
   wsRpcUrl: process.env.WS_RPC_URL,
@@ -20,7 +27,7 @@ module.exports = {
   minerMerkleTreeHeight: 20,
   privateKey: process.env.PRIVATE_KEY,
   instances: deployments,
-  poof: process.env.NET_ID === '42220' ? mainnetAddresses : alfajoresAddresses,
+  poof,
   port: process.env.PORT || 8000,
   poofServiceFee: Number(process.env.REGULAR_POOF_WITHDRAW_FEE),
   miningServiceFee: Number(process.env.MINING_SERVICE_FEE),
@@ -33,4 +40,5 @@ module.exports = {
   },
   minimumBalance: '1000000000000000000',
   pools,
+  treeAddresses,
 }

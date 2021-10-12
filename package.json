@@ -6,7 +6,6 @@
     "server": "node src/server.js",
     "worker": "node src/worker",
     "treeWatcher": "node src/treeWatcher",
-    "treeV2Watcher": "node src/treeV2Watcher.js",
     "priceWatcher": "node src/priceWatcher",
     "gasWatcher": "node src/gasWatcher",
     "healthWatcher": "node src/healthWatcher",
@@ -15,7 +14,7 @@
     "prettier:fix": "npx prettier --write . --config .prettierrc",
     "lint": "yarn eslint && yarn prettier:check",
     "test": "mocha",
-    "start": "yarn server & yarn gasWatcher & yarn priceWatcher & yarn treeWatcher & yarn treeV2Watcher & yarn worker & yarn healthWatcher"
+    "start": "yarn server & yarn gasWatcher & yarn priceWatcher & yarn treeWatcher & yarn worker & yarn healthWatcher"
   },
   "author": "poof.cash",
   "license": "MIT",

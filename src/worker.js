@@ -13,6 +13,7 @@ const swapABI = require('../abis/swap.abi.json')
 const poofABI = require('../abis/poof.abi.json')
 const { queue } = require('./queue')
 const {
+  poseidonHash2,
   poseidonHashTorn2,
   getInstance,
   fromDecimals,
@@ -30,6 +31,7 @@ const {
   poofServiceFee,
   miningServiceFee,
   pools,
+  treeAddresses,
 } = require('./config')
 const {
   calculateFee,
@@ -42,7 +44,7 @@ let kit
 let account
 let currentTx
 let currentJob
-let v1Tree
+const trees = {}
 let controller
 let swap
 let minerContract
@@ -50,53 +52,66 @@ let proxyContract
 const redis = new Redis(redisUrl)
 const redisSubscribe = new Redis(redisUrl)
 
-async function fetchV1Tree() {
-  const elements = await redis.get('tree:elements')
-  const convert = (_, val) => (typeof val === 'string' ? toBN(val) : val)
-  v1Tree = MerkleTree.deserialize(
-    JSON.parse(elements, convert),
-    poseidonHashTorn2,
-  )
-
-  if (
-    currentTx &&
-    currentJob &&
-    ['MINING_REWARD', 'MINING_WITHDRAW'].includes(currentJob.data.type)
-  ) {
-    const { proof, rewardArgs, args } = currentJob.data
-    if (toBN(args.account.inputRoot).eq(toBN(v1Tree.root()))) {
-      console.log(
-        'Account root is up to date. Skipping Root Update operation...',
-      )
-      return
-    } else {
-      console.log('Account root is outdated. Starting Root Update operation...')
-    }
-
-    const update = await controller.treeUpdate(
-      args.account.outputCommitment,
-      v1Tree,
+const getFetchTree = treeAddress => {
+  return async function fetchTree() {
+    const elements = await redis.get(`tree:${treeAddress}:elements`)
+    const convert = (_, val) => (typeof val === 'string' ? toBN(val) : val)
+    const isMiner = treeAddress === poof.PoofMiner.address
+    trees[treeAddress] = MerkleTree.deserialize(
+      JSON.parse(elements, convert),
+      isMiner ? poseidonHashTorn2 : poseidonHash2,
     )
 
-    if (currentJob.data.type === 'MINING_REWARD') {
-      currentTx = minerContract.methods.reward(
-        proof,
-        args,
-        update.proof,
-        update.args,
+    if (isMiner) {
+      console.log(
+        treeAddress,
+        isMiner,
+        currentTx !== undefined,
+        currentJob !== undefined,
+        currentJob &&
+          ['MINING_REWARD', 'MINING_WITHDRAW'].includes(currentJob.data.type),
       )
-    } else if (currentJob.data.type === 'MINING_WITHDRAW') {
-      currentTx = minerContract.methods.withdraw(
-        proof,
-        args,
-        update.proof,
-        update.args,
-      )
-    } else if (currentJob.data.type === 'BATCH_REWARD') {
-      // todo: not reachable; not working; not handling treeUpdate
-      currentTx = minerContract.methods.batchReward(rewardArgs)
     }
-    console.log('replaced pending tx')
+    if (
+      isMiner &&
+      currentTx &&
+      currentJob &&
+      ['MINING_REWARD', 'MINING_WITHDRAW'].includes(currentJob.data.type)
+    ) {
+      const { proof, args } = currentJob.data
+      if (toBN(args.account.inputRoot).eq(toBN(trees[treeAddress].root()))) {
+        console.log(
+          'Account root is up to date. Skipping Root Update operation...',
+        )
+        return
+      } else {
+        console.log(
+          'Account root is outdated. Starting Root Update operation...',
+        )
+      }
+
+      const update = await controller.treeUpdate(
+        args.account.outputCommitment,
+        trees[treeAddress],
+      )
+
+      if (currentJob.data.type === 'MINING_REWARD') {
+        currentTx = minerContract.methods.reward(
+          proof,
+          args,
+          update.proof,
+          update.args,
+        )
+      } else if (currentJob.data.type === 'MINING_WITHDRAW') {
+        currentTx = minerContract.methods.withdraw(
+          proof,
+          args,
+          update.proof,
+          update.args,
+        )
+      }
+      console.log('replaced pending tx')
+    }
   }
 }
 
@@ -112,8 +127,13 @@ async function start() {
       tornadoProxyABI,
       poof.PoofProxy.address,
     )
-    redisSubscribe.subscribe('treeUpdate', fetchV1Tree)
-    await fetchV1Tree()
+    for (const treeAddress of treeAddresses) {
+      redisSubscribe.subscribe(
+        `treeUpdate:${treeAddress}`,
+        getFetchTree(treeAddress),
+      )
+      await getFetchTree(treeAddress)()
+    }
     const provingKeys = {
       treeUpdateCircuit: require('../keys/TreeUpdate.json'),
       treeUpdateProvingKey: fs.readFileSync('./keys/TreeUpdate_proving_key.bin')
@@ -311,7 +331,7 @@ async function submitTx(job, retry = 0) {
   const isWithdraw =
     job.data.type === jobType.POOF_WITHDRAW || job.data.type === jobType.RELAY
   if (!isWithdraw) {
-    await fetchV1Tree()
+    await getFetchTree(poof.PoofMiner.address)()
   }
 
   try {
@@ -340,6 +360,7 @@ async function submitTx(job, retry = 0) {
   } catch (e) {
     // todo this could result in duplicated error logs
     // todo handle a case where account tree is still not up to date (wait and retry)?
+    console.warn('Submit tx error', e.message)
     if (
       !isWithdraw &&
       (e.message.indexOf('Outdated account merkle root') !== -1 ||

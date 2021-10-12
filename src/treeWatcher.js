@@ -1,21 +1,22 @@
 const MerkleTree = require('fixed-merkle-tree')
-const { redisUrl, wsRpcUrl, minerMerkleTreeHeight, poof } = require('./config')
-const { poseidonHashTorn2 } = require('./utils')
+const { redisUrl, wsRpcUrl, treeAddresses, poof } = require('./config')
+const { poseidonHash2, poseidonHashTorn2 } = require('./utils')
 const { toBN } = require('web3-utils')
 const Redis = require('ioredis')
 const redis = new Redis(redisUrl)
 const Web3 = require('web3')
 const wsUrlPool = wsRpcUrl.split(',')
-const MinerABI = require('../abis/mining.abi.json')
-let contract
+const PoofABI = require('../abis/poof.abi.json')
 
 let wsIdx = 0
 let web3
 
-let tree, eventSubscription, blockSubscription
+const trees = {}
+const eventSubscriptions = {}
+const blockSubscriptions = {}
 
 // todo handle the situation when we have two rewards in one block
-async function fetchEvents(from = 0, to = 'latest') {
+async function fetchEvents(contract, from = 0, to = 'latest') {
   try {
     const start = from
     const end = to === 'latest' ? await web3.eth.getBlockNumber() : to
@@ -41,71 +42,85 @@ async function fetchEvents(from = 0, to = 'latest') {
   }
 }
 
-async function processNewEvent(err, event) {
-  if (err) {
-    throw new Error(`Event handler error: ${err}`)
-    // console.error(err)
-    // return
-  }
+const getProcessNewEvent = contract => {
+  return async function processNewEvent(err, event) {
+    if (err) {
+      throw new Error(`Event handler error: ${err}`)
+      // console.error(err)
+      // return
+    }
 
-  console.log(
-    `New account event
+    console.log(
+      `New account event
      Index: ${event.returnValues.index}
      Commitment: ${event.returnValues.commitment}
      Nullifier: ${event.returnValues.nullifier}
      EncAcc: ${event.returnValues.encryptedAccount}`,
-  )
-  const { commitment, index } = event.returnValues
-  if (tree.elements().length === Number(index)) {
-    tree.insert(toBN(commitment))
-    await updateRedis()
-  } else if (tree.elements().length === Number(index) + 1) {
-    console.log('Replacing element', index)
-    tree.update(index, toBN(commitment))
-    await updateRedis()
-  } else {
-    console.log(`Invalid element index ${index}, rebuilding tree`)
-    await rebuild()
+    )
+    const treeAddress = contract.options.address
+    const { commitment, index } = event.returnValues
+    if (trees[treeAddress].elements().length === Number(index)) {
+      trees[treeAddress].insert(toBN(commitment))
+      await updateRedis(contract)
+    } else if (trees[treeAddress].elements().length === Number(index) + 1) {
+      console.log('Replacing element', index)
+      trees[treeAddress].update(index, toBN(commitment))
+      await updateRedis(contract)
+    } else {
+      console.log(`Invalid element index ${index}, rebuilding tree`)
+      await rebuild()
+    }
   }
 }
 
-async function processNewBlock(err) {
-  if (err) {
-    throw new Error(`Event handler error: ${err}`)
-    // console.error(err)
-    // return
+const getProcessNewBlock = contract => {
+  return async function processNewBlock(err) {
+    if (err) {
+      throw new Error(`Event handler error: ${err}`)
+      // console.error(err)
+      // return
+    }
+    // what if updateRedis takes more than 15 sec?
+    await updateRedis(contract)
   }
-  // what if updateRedis takes more than 15 sec?
-  await updateRedis()
 }
 
-async function updateRedis() {
+async function updateRedis(contract) {
   const rootOnContract = await contract.methods.getLastAccountRoot().call()
-  if (!tree.root().eq(toBN(rootOnContract))) {
+  const treeAddress = contract.options.address
+  if (!trees[treeAddress].root().eq(toBN(rootOnContract))) {
     console.log(
-      `Invalid tree root: ${tree.root()} != ${toBN(
+      `Invalid tree root: ${trees[treeAddress].root()} != ${toBN(
         rootOnContract,
       )}, rebuilding tree`,
     )
-    await rebuild()
+    await rebuild(contract)
     return
   }
-  const rootInRedis = await redis.get('tree:root')
-  if (!rootInRedis || !tree.root().eq(toBN(rootInRedis))) {
-    const serializedTree = JSON.stringify(tree.serialize())
-    await redis.set('tree:elements', serializedTree)
-    await redis.set('tree:root', tree.root().toString())
-    await redis.publish('treeUpdate', tree.root().toString())
-    console.log('Updated tree in redis, new root:', tree.root().toString())
-  } else {
-    console.log('Tree in redis is up to date, skipping update')
+  const rootInRedis = await redis.get(`tree:${treeAddress}:root`)
+  if (!rootInRedis || !trees[treeAddress].root().eq(toBN(rootInRedis))) {
+    const serializedTree = JSON.stringify(trees[treeAddress].serialize())
+    await redis.set(`tree:${treeAddress}:elements`, serializedTree)
+    await redis.set(
+      `tree:${treeAddress}:root`,
+      trees[treeAddress].root().toString(),
+    )
+    await redis.publish(
+      `treeUpdate:${treeAddress}`,
+      trees[treeAddress].root().toString(),
+    )
+    console.log(
+      'Updated tree in redis, new root:',
+      trees[treeAddress].root().toString(),
+    )
   }
-  await redis.hset('treeWatcherHealth', { status: true, error: '' })
+  await redis.hset('treeV2WatcherHealth', { status: true, error: '' })
 }
 
-async function rebuild() {
-  await eventSubscription.unsubscribe()
-  await blockSubscription.unsubscribe()
+async function rebuild(contract) {
+  const treeAddress = contract.options.address
+  await eventSubscriptions[treeAddress].unsubscribe()
+  await blockSubscriptions[treeAddress].unsubscribe()
   setTimeout(init, 3000)
 }
 
@@ -125,24 +140,35 @@ function initWeb3() {
 
 async function init() {
   try {
-    console.log('Initializing')
+    console.log('Initializing v2 tree updater')
     initWeb3()
-    const miner = poof.PoofMiner.address
-    contract = new web3.eth.Contract(MinerABI, miner)
+
     const block = await web3.eth.getBlockNumber()
-    const events = await fetchEvents(0, block)
-    tree = new MerkleTree(minerMerkleTreeHeight, events, {
-      hashFunction: poseidonHashTorn2,
-    })
-    console.log(
-      `Rebuilt tree with ${events.length} elements, root: ${tree.root()}`,
-    )
-    eventSubscription = contract.events.NewAccount(
-      { fromBlock: block + 1 },
-      processNewEvent,
-    )
-    blockSubscription = web3.eth.subscribe('newBlockHeaders', processNewBlock)
-    await updateRedis()
+    for (const treeAddress of treeAddresses) {
+      const contract = new web3.eth.Contract(PoofABI, treeAddress)
+      const events = await fetchEvents(contract, 0, block)
+      // TODO: HARDCODED 20
+      trees[treeAddress] = new MerkleTree(20, events, {
+        hashFunction:
+          treeAddress === poof.PoofMiner.address
+            ? poseidonHashTorn2
+            : poseidonHash2,
+      })
+      console.log(
+        `Rebuilt tree ${treeAddress} with ${
+          events.length
+        } elements, root: ${trees[treeAddress].root()}`,
+      )
+      eventSubscriptions[treeAddress] = contract.events.NewAccount(
+        { fromBlock: block + 1 },
+        getProcessNewEvent(contract),
+      )
+      blockSubscriptions[treeAddress] = web3.eth.subscribe(
+        'newBlockHeaders',
+        getProcessNewBlock(contract),
+      )
+      await updateRedis(contract)
+    }
   } catch (e) {
     console.error('error on init treeWatcher', e.message)
     setTimeout(init, 3000)
@@ -153,6 +179,6 @@ init()
 
 process.on('unhandledRejection', error => {
   console.error('Unhandled promise rejection', error)
-  redis.hset('treeWatcherHealth', { status: false, error: error.message })
+  redis.hset('treeV2WatcherHealth', { status: false, error: error.message })
   process.exit(1)
 })
