@@ -4,7 +4,7 @@ const ContractKit = require('@celo/contractkit')
 const { toBN, toWei, fromWei } = require('web3-utils')
 const MerkleTree = require('fixed-merkle-tree')
 const Redis = require('ioredis')
-const { Controller } = require('tornado-cash-anonymity-mining')
+const { Controller: ControllerV1 } = require('tornado-cash-anonymity-mining')
 
 const tornadoABI = require('../abis/tornadoABI.json')
 const tornadoProxyABI = require('../abis/tornadoProxyABI.json')
@@ -38,14 +38,18 @@ const {
   calculateRewardFee,
   calculateSwapFee,
 } = require('@poofcash/poof-kit')
-const { calculateFee: calculateFeeV2 } = require('@poofcash/poof-v2-kit')
+const {
+  calculateFee: calculateFeeV2,
+  Controller: ControllerV2,
+} = require('@poofcash/poof-v2-kit')
+const snarkjs = require('snarkjs-pkg')
 
 let kit
 let account
 let currentTx
 let currentJob
 const trees = {}
-let controller
+let controllerV1, controllerV2
 let swap
 let minerContract
 let proxyContract
@@ -62,22 +66,9 @@ const getFetchTree = treeAddress => {
       isMiner ? poseidonHashTorn2 : poseidonHash2,
     )
 
-    if (isMiner) {
-      console.log(
-        treeAddress,
-        isMiner,
-        currentTx !== undefined,
-        currentJob !== undefined,
-        currentJob &&
-          ['MINING_REWARD', 'MINING_WITHDRAW'].includes(currentJob.data.type),
-      )
-    }
-    if (
-      isMiner &&
-      currentTx &&
-      currentJob &&
-      ['MINING_REWARD', 'MINING_WITHDRAW'].includes(currentJob.data.type)
-    ) {
+    // Check if there is a tx to replace
+    if (currentTx && currentJob) {
+      console.log(currentJob.data.contract, treeAddress)
       const { proof, args } = currentJob.data
       if (toBN(args.account.inputRoot).eq(toBN(trees[treeAddress].root()))) {
         console.log(
@@ -90,27 +81,58 @@ const getFetchTree = treeAddress => {
         )
       }
 
-      const update = await controller.treeUpdate(
-        args.account.outputCommitment,
-        trees[treeAddress],
-      )
+      if (
+        isMiner &&
+        ['MINING_REWARD', 'MINING_WITHDRAW'].includes(currentJob.data.type)
+      ) {
+        const update = await controllerV1.treeUpdate(
+          args.account.outputCommitment,
+          trees[treeAddress],
+        )
 
-      if (currentJob.data.type === 'MINING_REWARD') {
-        currentTx = minerContract.methods.reward(
-          proof,
-          args,
-          update.proof,
-          update.args,
+        if (currentJob.data.type === 'MINING_REWARD') {
+          currentTx = minerContract.methods.reward(
+            proof,
+            args,
+            update.proof,
+            update.args,
+          )
+        } else if (currentJob.data.type === 'MINING_WITHDRAW') {
+          currentTx = minerContract.methods.withdraw(
+            proof,
+            args,
+            update.proof,
+            update.args,
+          )
+        }
+        console.log('replaced pending mining tx')
+      } else if (
+        currentJob.data.contract.toLowerCase() === treeAddress.toLowerCase()
+      ) {
+        const contract = new kit.web3.eth.Contract(poofABI, treeAddress)
+        const update = await controllerV2.treeUpdate(
+          contract,
+          args.account.outputCommitment,
+          trees[treeAddress],
         )
-      } else if (currentJob.data.type === 'MINING_WITHDRAW') {
-        currentTx = minerContract.methods.withdraw(
-          proof,
-          args,
-          update.proof,
-          update.args,
-        )
+
+        if (currentJob.data.type === 'WITHDRAW_V2') {
+          currentTx = contract.methods.withdraw(
+            proof,
+            args,
+            update.proof,
+            update.args,
+          )
+        } else if (currentJob.data.type === 'MINT_V2') {
+          currentTx = contract.methods.mint(
+            proof,
+            args,
+            update.proof,
+            update.args,
+          )
+        }
+        console.log('replaced pending v2 tx')
       }
-      console.log('replaced pending tx')
     }
   }
 }
@@ -134,13 +156,22 @@ async function start() {
       )
       await getFetchTree(treeAddress)()
     }
-    const provingKeys = {
-      treeUpdateCircuit: require('../keys/TreeUpdate.json'),
-      treeUpdateProvingKey: fs.readFileSync('./keys/TreeUpdate_proving_key.bin')
-        .buffer,
-    }
-    controller = new Controller({ provingKeys })
-    await controller.init()
+    controllerV1 = new ControllerV1({
+      provingKeys: {
+        treeUpdateCircuit: require('../keys/TreeUpdate.json'),
+        treeUpdateProvingKey: fs.readFileSync(
+          './keys/TreeUpdate_proving_key.bin',
+        ).buffer,
+      },
+    })
+    await controllerV1.init()
+    controllerV2 = new ControllerV2({
+      snarkjs,
+      provingKeys: {
+        treeUpdateWasm: fs.readFileSync('./keys/TreeUpdate.wasm'),
+        treeUpdateZkey: fs.readFileSync('./keys/TreeUpdate_circuit_final.zkey'),
+      },
+    })
     queue.process(processJob)
     console.log('Worker started')
   } catch (e) {
@@ -328,10 +359,21 @@ async function submitTx(job, retry = 0) {
   await checkFee(job)
   currentTx = await getTxObject(job)
 
-  const isWithdraw =
-    job.data.type === jobType.POOF_WITHDRAW || job.data.type === jobType.RELAY
+  const isWithdraw = [
+    jobType.POOF_WITHDRAW,
+    job.data.type === jobType.RELAY,
+  ].includes(job.data.type)
+  const isV2 = [
+    jobType.WITHDRAW_V2,
+    job.data.type === jobType.MINT_V2,
+  ].includes(job.data.type)
+
   if (!isWithdraw) {
-    await getFetchTree(poof.PoofMiner.address)()
+    if (isV2) {
+      await getFetchTree(job.data.contract)()
+    } else {
+      await getFetchTree(poof.PoofMiner.address)()
+    }
   }
 
   try {

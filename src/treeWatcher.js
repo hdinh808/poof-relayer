@@ -52,6 +52,7 @@ const getProcessNewEvent = contract => {
 
     console.log(
       `New account event
+     Contract: ${contract.options.address}
      Index: ${event.returnValues.index}
      Commitment: ${event.returnValues.commitment}
      Nullifier: ${event.returnValues.nullifier}
@@ -80,7 +81,7 @@ const getProcessNewBlock = contract => {
       // console.error(err)
       // return
     }
-    // what if updateRedis takes more than 15 sec?
+    // what if updateRedis takes more than 5 sec?
     await updateRedis(contract)
   }
 }
