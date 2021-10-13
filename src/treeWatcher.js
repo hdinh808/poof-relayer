@@ -122,7 +122,7 @@ async function rebuild(contract) {
   const treeAddress = contract.options.address
   await eventSubscriptions[treeAddress].unsubscribe()
   await blockSubscriptions[treeAddress].unsubscribe()
-  setTimeout(init, 3000)
+  setTimeout(getInit(treeAddress), 3000)
 }
 
 function initWeb3() {
@@ -139,13 +139,12 @@ function initWeb3() {
   wsIdx = (wsIdx + 1) % wsUrlPool.length
 }
 
-async function init() {
-  try {
-    console.log('Initializing v2 tree updater')
-    initWeb3()
+const getInit = treeAddress => {
+  return async function init() {
+    try {
+      console.log(`Initializing v2 tree updater for ${treeAddress}`)
 
-    const block = await web3.eth.getBlockNumber()
-    for (const treeAddress of treeAddresses) {
+      const block = await web3.eth.getBlockNumber()
       const contract = new web3.eth.Contract(PoofABI, treeAddress)
       const events = await fetchEvents(contract, 0, block)
       // TODO: HARDCODED 20
@@ -169,14 +168,17 @@ async function init() {
         getProcessNewBlock(contract),
       )
       await updateRedis(contract)
+    } catch (e) {
+      console.error('error on init treeWatcher', e.message)
+      setTimeout(init, 3000)
     }
-  } catch (e) {
-    console.error('error on init treeWatcher', e.message)
-    setTimeout(init, 3000)
   }
 }
 
-init()
+initWeb3()
+for (const treeAddress of treeAddresses) {
+  getInit(treeAddress)()
+}
 
 process.on('unhandledRejection', error => {
   console.error('Unhandled promise rejection', error)
