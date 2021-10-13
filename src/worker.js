@@ -68,7 +68,6 @@ const getFetchTree = treeAddress => {
 
     // Check if there is a tx to replace
     if (currentTx && currentJob) {
-      console.log(currentJob.data.contract, treeAddress)
       const { proof, args } = currentJob.data
       if (toBN(args.account.inputRoot).eq(toBN(trees[treeAddress].root()))) {
         console.log(
