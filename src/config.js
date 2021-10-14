@@ -13,7 +13,7 @@ const poof = netId === 42220 ? mainnetAddresses : alfajoresAddresses
 const pools = v2Deployments
 const treeAddresses = [
   ...pools[netId].map(p => p.poolAddress),
-  poof.PoofMiner.address,
+  ...(netId === 42220 ? [poof.PoofMiner.address] : []),
 ]
 
 module.exports = {
@@ -23,7 +23,6 @@ module.exports = {
   wsRpcUrl: process.env.WS_RPC_URL,
   oracleRpcUrl: process.env.ORACLE_RPC_URL || 'https://mainnet.infura.io/',
   offchainOracleAddress: '0x080AB73787A8B13EC7F40bd7d00d6CC07F9b24d0',
-  aggregatorAddress: process.env.AGGREGATOR,
   minerMerkleTreeHeight: 20,
   privateKey: process.env.PRIVATE_KEY,
   instances: deployments,

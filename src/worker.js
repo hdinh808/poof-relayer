@@ -1,6 +1,5 @@
 const fs = require('fs')
 const Web3 = require('web3')
-const ContractKit = require('@celo/contractkit')
 const { toBN, toWei, fromWei } = require('web3-utils')
 const MerkleTree = require('fixed-merkle-tree')
 const Redis = require('ioredis')
@@ -44,7 +43,7 @@ const {
 } = require('@poofcash/poof-v2-kit')
 const snarkjs = require('snarkjs-pkg')
 
-let kit
+let web3
 let account
 let currentTx
 let currentJob
@@ -108,21 +107,21 @@ const getFetchTree = treeAddress => {
       } else if (
         currentJob.data.contract.toLowerCase() === treeAddress.toLowerCase()
       ) {
-        const contract = new kit.web3.eth.Contract(poofABI, treeAddress)
+        const contract = new web3.eth.Contract(poofABI, treeAddress)
         const update = await controllerV2.treeUpdate(
           contract,
           args.account.outputCommitment,
           trees[treeAddress],
         )
 
-        if (currentJob.data.type === 'WITHDRAW_V2') {
+        if (currentJob.data.type === jobType.WITHDRAW_V2) {
           currentTx = contract.methods.withdraw(
             proof,
             args,
             update.proof,
             update.args,
           )
-        } else if (currentJob.data.type === 'MINT_V2') {
+        } else if (currentJob.data.type === jobType.MINT_V2) {
           currentTx = contract.methods.mint(
             proof,
             args,
@@ -138,13 +137,11 @@ const getFetchTree = treeAddress => {
 
 async function start() {
   try {
-    const web3 = new Web3(httpRpcUrl)
-    kit = ContractKit.newKitFromWeb3(web3)
-    kit.connection.addAccount(privateKey)
-    account = (await kit.web3.eth.getAccounts())[0]
-    swap = new kit.web3.eth.Contract(swapABI, poof.PoofRewardSwap.address)
-    minerContract = new kit.web3.eth.Contract(miningABI, poof.PoofMiner.address)
-    proxyContract = new kit.web3.eth.Contract(
+    web3 = new Web3(httpRpcUrl)
+    account = web3.eth.accounts.wallet.add(privateKey).address
+    swap = new web3.eth.Contract(swapABI, poof.PoofRewardSwap.address)
+    minerContract = new web3.eth.Contract(miningABI, poof.PoofMiner.address)
+    proxyContract = new web3.eth.Contract(
       tornadoProxyABI,
       poof.PoofProxy.address,
     )
@@ -276,7 +273,7 @@ async function checkWithdrawV2Fee({ args, contract }) {
   const feePercent = toBN(fromDecimals(amount, decimals))
     .mul(toBN(poofServiceFee * 1e10))
     .div(toBN(1e10 * 100))
-  const poof = new kit.web3.eth.Contract(poofABI, contract)
+  const poof = new web3.eth.Contract(poofABI, contract)
   const unitPerUnderlying = await poof.methods.unitPerUnderlying().call()
 
   const desiredFee = calculateFeeV2(
@@ -307,14 +304,14 @@ function getTxObject({ data }) {
         ...data.args,
       )
     } else {
-      const contract = new kit.web3.eth.Contract(tornadoABI, data.contract)
+      const contract = new web3.eth.Contract(tornadoABI, data.contract)
       return contract.methods.withdraw(data.proof, ...data.args)
     }
   } else if (data.type === jobType.WITHDRAW_V2) {
-    const contract = new kit.web3.eth.Contract(poofABI, data.contract)
+    const contract = new web3.eth.Contract(poofABI, data.contract)
     return contract.methods.withdraw(data.proof, data.args)
   } else if (data.type === jobType.MINT_V2) {
-    const contract = new kit.web3.eth.Contract(poofABI, data.contract)
+    const contract = new web3.eth.Contract(poofABI, data.contract)
     return contract.methods.mint(data.proof, data.args)
   } else if (data.type === jobType.BATCH_REWARD) {
     return minerContract.methods.batchReward(data.rewardArgs)
@@ -326,7 +323,7 @@ function getTxObject({ data }) {
 
 async function isOutdatedTreeRevert(receipt, currentTx) {
   try {
-    await kit.web3.eth.call(currentTx.tx, receipt.blockNumber)
+    await web3.eth.call(currentTx.tx, receipt.blockNumber)
     console.log('Simulated call successful')
     return false
   } catch (e) {
@@ -358,14 +355,10 @@ async function submitTx(job, retry = 0) {
   await checkFee(job)
   currentTx = await getTxObject(job)
 
-  const isWithdraw = [
-    jobType.POOF_WITHDRAW,
-    job.data.type === jobType.RELAY,
-  ].includes(job.data.type)
-  const isV2 = [
-    jobType.WITHDRAW_V2,
-    job.data.type === jobType.MINT_V2,
-  ].includes(job.data.type)
+  const isWithdraw = [jobType.POOF_WITHDRAW, jobType.RELAY].includes(
+    job.data.type,
+  )
+  const isV2 = [jobType.WITHDRAW_V2, jobType.MINT_V2].includes(job.data.type)
 
   if (!isWithdraw) {
     if (isV2) {
@@ -375,11 +368,17 @@ async function submitTx(job, retry = 0) {
     }
   }
 
-  const gasPrice = (await redis.hget('gasPrices', 'min')) || 0.5
+  const gasPrice = toWei((await redis.hget('gasPrices', 'min')) || 0.5, 'gwei')
   try {
+    const gas = await currentTx.estimateGas({
+      from: account,
+      gasPrice,
+      value: job.data.args[5],
+    })
     const receipt = await currentTx.send({
       from: account,
-      gasPrice: toWei(gasPrice, 'gwei'),
+      gasPrice,
+      gas,
       value: job.data.args[5],
     })
     await updateTxHash(receipt.transactionHash)
@@ -416,6 +415,7 @@ async function submitTx(job, retry = 0) {
         throw new Error('Tree update retry limit exceeded')
       }
     } else {
+      console.error(e)
       throw new Error(`Revert by smart contract ${e.message}`)
     }
   }

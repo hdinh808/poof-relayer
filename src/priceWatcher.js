@@ -1,5 +1,5 @@
 const Redis = require('ioredis')
-const { redisUrl, oracleRpcUrl, rceloAddress } = require('./config')
+const { redisUrl, oracleRpcUrl, netId } = require('./config')
 const { setSafeInterval } = require('./utils')
 const redis = new Redis(redisUrl)
 const { newKitFromWeb3, StableToken } = require('@celo/contractkit')
@@ -16,41 +16,49 @@ const web3 = new Web3(
 const kit = newKitFromWeb3(web3)
 
 async function main() {
-  try {
-    // TODO: poof price, rcelo price
-    const oneEth = toWei('1')
+  if ([42220, 44787].includes(netId)) {
+    try {
+      // TODO: poof price, rcelo price
+      const oneEth = toWei('1')
 
-    // Get cUSD price in CELO
-    const exchangeUSD = await kit.contracts.getExchange(StableToken.cUSD)
-    const exchangeEUR = await kit.contracts.getExchange(StableToken.cEUR)
-    const cusdPrice = Number(
-      fromWei((await exchangeUSD.quoteGoldBuy(oneEth)).toString()),
-    )
-    const ceurPrice = Number(
-      fromWei((await exchangeEUR.quoteGoldBuy(oneEth)).toString()),
-    )
+      // Get cUSD price in CELO
+      const exchangeUSD = await kit.contracts.getExchange(StableToken.cUSD)
+      const exchangeEUR = await kit.contracts.getExchange(StableToken.cEUR)
+      const cusdPrice = Number(
+        fromWei((await exchangeUSD.quoteGoldBuy(oneEth)).toString()),
+      )
+      const ceurPrice = Number(
+        fromWei((await exchangeEUR.quoteGoldBuy(oneEth)).toString()),
+      )
 
-    // get rCELO price in CELO
-    const rCELO = new kit.web3.eth.Contract(
-      rceloABI,
-      '0x1a8Dbe5958c597a744Ba51763AbEBD3355996c3e',
-    )
-    const rceloPrice = Number(
-      fromWei((await rCELO.methods.savingsToCELO(oneEth).call()).toString()),
-    )
+      // get rCELO price in CELO
+      const rCELO = new kit.web3.eth.Contract(
+        rceloABI,
+        '0x1a8Dbe5958c597a744Ba51763AbEBD3355996c3e',
+      )
+      const rceloPrice = Number(
+        fromWei((await rCELO.methods.savingsToCELO(oneEth).call()).toString()),
+      )
 
-    const celoPrices = {
-      celo: 1.0,
-      poof: 1.0,
-      rcelo: rceloPrice,
-      cusd: cusdPrice,
-      ceur: ceurPrice,
+      const celoPrices = {
+        celo: 1.0,
+        poof: 1.0,
+        rcelo: rceloPrice,
+        cusd: cusdPrice,
+        ceur: ceurPrice,
+      }
+
+      await redis.hmset('prices', celoPrices)
+      console.log('Wrote following prices to redis', celoPrices)
+    } catch (e) {
+      console.error('priceWatcher error', e)
     }
-
-    await redis.hmset('prices', celoPrices)
-    console.log('Wrote following prices to redis', celoPrices)
-  } catch (e) {
-    console.error('priceWatcher error', e)
+  } else if ([4002, 250].includes(netId)) {
+    const ftmPrices = {
+      ftm: 1.0,
+    }
+    await redis.hmset('prices', ftmPrices)
+    console.log('Wrote following prices to redis', ftmPrices)
   }
 }
 
