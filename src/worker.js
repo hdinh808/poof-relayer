@@ -375,10 +375,11 @@ async function submitTx(job, retry = 0) {
     }
   }
 
+  const gasPrice = (await redis.hget('gasPrices', 'min')) || 0.5
   try {
     const receipt = await currentTx.send({
       from: account,
-      gasPrice: toWei('0.5', 'gwei'),
+      gasPrice: toWei(gasPrice, 'gwei'),
       value: job.data.args[5],
     })
     await updateTxHash(receipt.transactionHash)
