@@ -22,7 +22,7 @@
   "dependencies": {
     "@celo/contractkit": "^1.2.4",
     "@poofcash/poof-kit": "^1.0.15",
-    "@poofcash/poof-v2-kit": "^0.1.6-beta",
+    "@poofcash/poof-v2-kit": "^0.1.7",
     "@poofcash/tx-manager": "^0.3.0",
     "ajv": "^6.12.5",
     "async-mutex": "^0.2.4",
