@@ -37,6 +37,7 @@ module.exports = {
     [jobType.MINING_WITHDRAW]: 400000,
     [jobType.WITHDRAW_V2]: 1e6,
   },
+  maxGasPrice: process.env.MAX_GAS_PRICE,
   minimumBalance: '1000000000000000000',
   pools,
   treeAddresses,

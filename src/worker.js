@@ -31,6 +31,7 @@ const {
   miningServiceFee,
   pools,
   treeAddresses,
+  maxGasPrice,
 } = require('./config')
 const {
   calculateFee,
@@ -368,7 +369,13 @@ async function submitTx(job, retry = 0) {
     }
   }
 
-  const gasPrice = toWei((await redis.hget('gasPrices', 'min')) || 0.5, 'gwei')
+  const gasPrice = toWei(
+    Math.max(
+      (await redis.hget('gasPrices', 'min')) || 0.5,
+      maxGasPrice,
+    ).toString(),
+    'gwei',
+  )
   try {
     const gas = await currentTx.estimateGas({
       from: account,
