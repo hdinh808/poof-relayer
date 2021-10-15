@@ -527,10 +527,10 @@
     websnark "git+https://github.com/poofcash/websnark.git#a0226866cc9d9d9f7195ffe439709d25e69ca680"
     yargs "^17.0.1"
 
-"@poofcash/poof-v2-kit@^0.1.7":
-  version "0.1.7"
-  resolved "https://registry.yarnpkg.com/@poofcash/poof-v2-kit/-/poof-v2-kit-0.1.7.tgz#0126e9ee3b9daedf7efe588fea62430e78a91b28"
-  integrity sha512-NEbOAZXUbJ35RUyGxlgO58XN6xfQdUG7xmntNUuaF6Kc71wXM6dSu/zp8JY+4bysPjGnT9hwppMQUke0oNyZrw==
+"@poofcash/poof-v2-kit@^0.1.8":
+  version "0.1.8"
+  resolved "https://registry.yarnpkg.com/@poofcash/poof-v2-kit/-/poof-v2-kit-0.1.8.tgz#f2a1f72798ec0bb819ee90cd51bb5fb5e7fb5a6f"
+  integrity sha512-e8FgVkv2lBOhDXX/58aEp/IK5dZqM4T3loVwNA7qVDH2UJj1RPQrQXfJoxCPkv65fg8jgUWJD3b4LQu/xtEvFg==
   dependencies:
     "@typechain/web3-v1" "^3.0.0"
     "@types/bn.js" "^4.11.6"
