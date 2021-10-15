@@ -6,7 +6,7 @@ const Redis = require('ioredis')
 const redis = new Redis(redisUrl)
 const Web3 = require('web3')
 const wsUrlPool = wsRpcUrl.split(',')
-const PoofABI = require('../abis/poof.abi.json')
+const PoofBaseABI = require('../abis/poofBase.abi.json')
 
 let wsIdx = 0
 let web3
@@ -145,7 +145,7 @@ const getInit = treeAddress => {
       console.log(`Initializing v2 tree updater for ${treeAddress}`)
 
       const block = await web3.eth.getBlockNumber()
-      const contract = new web3.eth.Contract(PoofABI, treeAddress)
+      const contract = new web3.eth.Contract(PoofBaseABI, treeAddress)
       const events = await fetchEvents(contract, 0, block)
       // TODO: HARDCODED 20
       trees[treeAddress] = new MerkleTree(20, events, {
